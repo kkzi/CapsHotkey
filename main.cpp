@@ -4,7 +4,7 @@
 #include <iostream>
 #include <simple/use_imgui_dx12.hpp>
 
-constexpr auto APP_ID{ TEXT("Caps Hotkey v2") };
+constexpr const wchar_t *APP_ID{ TEXT("Caps Hotkey v2") };
 
 enum class MenuAction : uint8_t
 {
@@ -47,7 +47,7 @@ static auto show_main_window()
 
 static auto set_autorun_enabled()
 {
-    if (set_app_autorun(APP_ID, app_path_, !is_autorun_))
+    if (set_app_autorun(APP_ID, app_path_.data(), !is_autorun_))
     {
         is_autorun_ = !is_autorun_;
     }
@@ -136,8 +136,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
 {
     icon_logo_ = LoadIcon(hInst, MAKEINTRESOURCE(IDI_ICON2));
     app_path_ = []() -> std::wstring {
-        WCHAR path[MAX_PATH];
-        GetModuleFileNameW(NULL, path, MAX_PATH);
+        std::wstring path(MAX_PATH, 0);
+        GetModuleFileName(NULL, path.data(), (DWORD)path.size());
         return path;
     }();
     is_autorun_ = is_app_autorun(APP_ID);
@@ -171,7 +171,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         hwnd_ = win;
 
         ImGui::Text("Capslock Hotkey Mappings");
-        if (ImGui::BeginTable("MAPPINGS", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders))
+        auto flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY;
+        if (ImGui::BeginTable("MAPPINGS", 6, flags))
         {
             ImGui::TableSetupColumn("CAPSLOCK", ImGuiTableColumnFlags_WidthFixed, 80);
             ImGui::TableSetupColumn("Ctrl", ImGuiTableColumnFlags_WidthFixed, 60);
@@ -181,7 +182,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
             ImGui::TableSetupColumn("Desc.", ImGuiTableColumnFlags_WidthStretch, 0);
             ImGui::TableHeadersRow();
 
-            for (auto &&[_, item] : key2hook_)
+            for (auto &&item : key_hooks_)
             {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);

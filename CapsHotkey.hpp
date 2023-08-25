@@ -285,16 +285,24 @@ static auto process_keydown(int keycode) -> bool
 
 static auto process_keyup(int keycode) -> bool
 {
-    if (keycode == KEY_CAPSLOCK)
+    if (auto capslock_pressed = capslock_down_time_.has_value(); capslock_pressed)
     {
-        auto duration = duration_cast<milliseconds>(system_clock::now() - capslock_down_time_.value());
-        if (duration <= PRESS_TIMEOUT && !capslock_busy_)
+        if (keycode == KEY_CAPSLOCK)
         {
-            capslock_busy_ = true;
-            key_click(KEY_CAPSLOCK);
-            capslock_busy_ = false;
+            auto duration = duration_cast<milliseconds>(system_clock::now() - capslock_down_time_.value());
+            if (duration <= PRESS_TIMEOUT && !capslock_busy_)
+            {
+                capslock_busy_ = true;
+                key_click(KEY_CAPSLOCK);
+                capslock_busy_ = false;
+            }
+            capslock_down_time_ = std::nullopt;
         }
-        capslock_down_time_ = std::nullopt;
+        else if (keycode == VK_LSHIFT || keycode == VK_LMENU)  // ignore input method change
+        {
+            key_up(keycode);
+            return true;
+        }
     }
     return false;
 }

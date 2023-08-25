@@ -7,8 +7,8 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <optional>
-#include <unordered_map>
 #include <windows.h>
 
 using namespace std::chrono;
@@ -20,13 +20,14 @@ static constexpr uint8_t KEY_CTRL{ 1 };
 static constexpr uint8_t KEY_ALT{ 2 };
 static constexpr uint8_t KEY_SHIFT{ 4 };
 static constexpr uint8_t KEY_WIN{ 8 };
-static constexpr duration PRESS_TIMEOUT{ 1s };
+static constexpr duration PRESS_TIMEOUT{ 300ms };
 
 static bool capslock_busy_{ false };
 static std::optional<time_point<system_clock>> capslock_down_time_{ std::nullopt };
 
 struct KeyHookItem
 {
+    std::string desc;
     uint8_t src_modified{ 0 };
     int src_keycode{ 0 };
     uint8_t tar_modified{ 0 };
@@ -49,14 +50,56 @@ static auto char2key(char chr) -> int
     return (unsigned int)0x41 + std::tolower(chr) - 'a';
 }
 
-static auto keyid(uint8_t modified, int keycode) -> std::string
+static auto key2str(UCHAR vk) -> std::string
+{
+    UINT scancode = MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+    CHAR szName[128];
+    int result = 0;
+    switch (vk)
+    {
+    case VK_LEFT:
+    case VK_UP:
+    case VK_RIGHT:
+    case VK_DOWN:
+    case VK_RCONTROL:
+    case VK_RMENU:
+    case VK_LWIN:
+    case VK_RWIN:
+    case VK_APPS:
+    case VK_PRIOR:
+    case VK_NEXT:
+    case VK_END:
+    case VK_HOME:
+    case VK_INSERT:
+    case VK_DELETE:
+    case VK_DIVIDE:
+    case VK_NUMLOCK:
+        scancode |= KF_EXTENDED;
+    default:
+        result = GetKeyNameTextA(scancode << 16, szName, 128);
+    }
+    if (result == 0)
+        throw std::system_error(std::error_code(GetLastError(), std::system_category()), "WinAPI Error occured.");
+    return szName;
+}
+
+static auto modified2longstr(int modified) -> std::string
 {
     std::string prefix;
-    prefix += modified & KEY_CTRL ? "C" : "";
-    prefix += modified & KEY_ALT ? "A" : "";
-    prefix += modified & KEY_SHIFT ? "S" : "";
-    prefix += prefix.empty() ? "" : "-";
-    return prefix + std::to_string(keycode);
+    prefix += modified & KEY_CTRL ? "Ctrl " : "";
+    prefix += modified & KEY_ALT ? "Alt " : "";
+    prefix += modified & KEY_SHIFT ? "Shift " : "";
+    return prefix;
+}
+
+static auto key_text(int modified, int keycode) -> std::string
+{
+    return modified2longstr(modified) + key2str(keycode);
+}
+
+static auto keyid(uint8_t modified, int keycode) -> std::string
+{
+    return key_text(modified, keycode);
 }
 
 static auto is_key_pressed(int key) -> bool
@@ -77,6 +120,7 @@ static auto is_specified_key(int key) -> bool
         VK_RMENU,
         VK_LWIN,
         VK_RWIN,
+        VK_ESCAPE,
     };
     return std::find(specified_keys.begin(), specified_keys.end(), key) != specified_keys.end();
 }
@@ -130,7 +174,7 @@ static auto key_click(uint8_t modified, std::vector<int> keys, const KeyHookFunc
         key_up(VK_LWIN);
 }
 
-static std::unordered_map<std::string, KeyHookFunc> name2func_{
+static std::map<std::string, KeyHookFunc> name2func_{
     {
         "delete_left_word",
         [] {
@@ -172,32 +216,31 @@ static std::unordered_map<std::string, KeyHookFunc> name2func_{
 };
 
 static std::vector<KeyHookItem> key_hooks_{
-    { 0, char2key('h'), 0, { VK_LEFT } },
-    { 0, char2key('j'), 0, { VK_DOWN } },
-    { 0, char2key('k'), 0, { VK_UP } },
-    { 0, char2key('l'), 0, { VK_RIGHT } },
+    { "", 0, char2key('h'), 0, { VK_LEFT } },
+    { "", 0, char2key('j'), 0, { VK_DOWN } },
+    { "", 0, char2key('k'), 0, { VK_UP } },
+    { "", 0, char2key('l'), 0, { VK_RIGHT } },
 
-    { 0, char2key('a'), 0, { VK_HOME } },
-    { 0, char2key('e'), 0, { VK_END } },
+    { "", 0, char2key('a'), 0, { VK_HOME } },
+    { "", 0, char2key('e'), 0, { VK_END } },
 
-    { 0, char2key('w'), 0, {}, "delete_left_word" },
-    { 0, char2key('u'), 0, {}, "delete_to_line_begin" },
-    { 0, char2key('c'), 0, {}, "delete_to_line_end" },
-    { 0, char2key('s'), 0, {}, "delete_current_line" },
+    { "Delete word backforward", 0, char2key('w'), 0, {}, "delete_left_word" },
+    { "Delete from cursor to line begin", 0, char2key('u'), 0, {}, "delete_to_line_begin" },
+    { "Delete from cursor to line end", 0, char2key('c'), 0, {}, "delete_to_line_end" },
+    { "Delete current line", 0, char2key('s'), 0, {}, "delete_current_line" },
 
-    { 0, char2key('o'), 0, { VK_END, VK_RETURN } },
-    { KEY_SHIFT, char2key('o'), 0, {}, "new_line_up" },
+    { "Insert new blank line after current", 0, char2key('o'), 0, { VK_END, VK_RETURN } },
+    { "Insert new blank line before current", KEY_SHIFT, char2key('o'), 0, {}, "new_line_up" },
 
-    { 0, char2key('y'), KEY_CTRL, { VK_INSERT } },
-    { 0, char2key('p'), KEY_SHIFT, { VK_INSERT } },
+    { "Copy", 0, char2key('y'), KEY_CTRL, { VK_INSERT } },
+    { "Paste", 0, char2key('p'), KEY_SHIFT, { VK_INSERT } },
 
-    // !!! no responsed
-    { KEY_SHIFT, char2key('q'), 0, {}, "$quit_current_app" },
-    { KEY_SHIFT, VK_OEM_2 /* ? */, 0, {}, "$show_help_window" },
+    { "Quit", KEY_SHIFT, char2key('q'), 0, {}, "quit_current_app" },
+    { "Help", KEY_SHIFT, VK_OEM_2 /* ? */, 0, {}, "show_help_window" },
 };
 
-static std::unordered_map<std::string, KeyHookItem> key2hook_ = ([] {
-    std::unordered_map<std::string, KeyHookItem> key2hook;
+static std::map<std::string, KeyHookItem> key2hook_ = ([] {
+    std::map<std::string, KeyHookItem> key2hook;
     for (auto it : key_hooks_)
     {
         key2hook[keyid(it.src_modified, it.src_keycode)] = it;
@@ -233,8 +276,8 @@ static auto process_keydown(int keycode) -> bool
                 const auto &item = key2hook_.at(key);
                 const auto &func = name2func_.contains(item.func) ? name2func_.at(item.func) : nullptr;
                 key_click(item.tar_modified, item.targets, func);
+                return true;
             }
-            return true;
         }
     }
     return false;

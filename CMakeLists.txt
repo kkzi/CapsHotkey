@@ -3,10 +3,10 @@ project(CapsHotkey)
 
 set(CMAKE_CXX_STANDARD 20)
 
-#if (MSVC)
-#    string(REGEX REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-#    string(REGEX REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-#    add_compile_options($<$<CONFIG:>:/MT> $<$<CONFIG:Debug>:/MTd> $<$<CONFIG:Release>:/MT>)
-#endif (MSVC)
-
-add_executable(${PROJECT_NAME} WIN32 main.cpp logo.rc)
+find_package(imgui CONFIG REQUIRED)
+aux_source_directory(. SRCS)
+add_executable(${PROJECT_NAME} WIN32 ${SRCS} res/app.rc)
+#target_include_directories(${PROJECT_NAME} PRIVATE $ENV{SIMPLE_CPP})
+target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE)
+target_include_directories(${PROJECT_NAME} PRIVATE "C:/Code/simple")
+target_link_libraries(${PROJECT_NAME} PRIVATE imgui::imgui)

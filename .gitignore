@@ -10,4 +10,5 @@ Release
 *.ilk
 *.log
 *.user
+*.aps
 CMakeSettings.json

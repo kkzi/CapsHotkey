@@ -42,7 +42,8 @@ public:
     template <class T>
     bool write(std::basic_string_view<T> name, std::basic_string_view<T> value)
     {
-        return ok_ && RegSetValueEx(raw_, name.data(), 0, REG_SZ, (const BYTE *)value.data(), (DWORD)value.size()) == ERROR_SUCCESS;
+        auto len = (DWORD)(value.size() * sizeof(T));
+        return ok_ && RegSetValueEx(raw_, name.data(), 0, REG_SZ, (const BYTE *)value.data(), len) == ERROR_SUCCESS;
     }
 
     template <class T>

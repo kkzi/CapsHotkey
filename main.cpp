@@ -172,13 +172,10 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
 
         ImGui::Text("Capslock Hotkey Mappings");
         auto flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY;
-        if (ImGui::BeginTable("MAPPINGS", 6, flags))
+        if (ImGui::BeginTable("MAPPINGS", 3, flags))
         {
-            ImGui::TableSetupColumn("CAPSLOCK", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("Ctrl", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("Alt", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("Shift", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 60);
+            ImGui::TableSetupColumn("CAPSLOCK", ImGuiTableColumnFlags_WidthFixed, 100);
+            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 100);
             ImGui::TableSetupColumn("Desc.", ImGuiTableColumnFlags_WidthStretch, 0);
             ImGui::TableHeadersRow();
 
@@ -188,14 +185,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
                 ImGui::TableSetColumnIndex(0);
                 ImGui::Text("O");
                 ImGui::TableSetColumnIndex(1);
-                ImGui::Text(item.src_modified & KEY_CTRL ? "O" : "");
-                ImGui::TableSetColumnIndex(2);
-                ImGui::Text(item.src_modified & KEY_ALT ? "O" : "");
-                ImGui::TableSetColumnIndex(3);
-                ImGui::Text(item.src_modified & KEY_SHIFT ? "O" : "");
-                ImGui::TableSetColumnIndex(4);
                 ImGui::Text(key2str(item.src_keycode).c_str());
-                ImGui::TableSetColumnIndex(5);
+                ImGui::TableSetColumnIndex(2);
                 ImGui::Text((item.desc.empty() ? key2str(item.targets.at(0)) : item.desc).c_str());
             }
             ImGui::EndTable();

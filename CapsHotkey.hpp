@@ -28,7 +28,6 @@ static std::optional<time_point<system_clock>> capslock_down_time_{ std::nullopt
 struct KeyHookItem
 {
     std::string desc;
-    uint8_t src_modified{ 0 };
     int src_keycode{ 0 };
     uint8_t tar_modified{ 0 };
     std::vector<int> targets;
@@ -216,34 +215,34 @@ static std::map<std::string, KeyHookFunc> name2func_{
 };
 
 static std::vector<KeyHookItem> key_hooks_{
-    { "", 0, char2key('h'), 0, { VK_LEFT } },
-    { "", 0, char2key('j'), 0, { VK_DOWN } },
-    { "", 0, char2key('k'), 0, { VK_UP } },
-    { "", 0, char2key('l'), 0, { VK_RIGHT } },
+    { "", char2key('h'), 0, { VK_LEFT } },
+    { "", char2key('j'), 0, { VK_DOWN } },
+    { "", char2key('k'), 0, { VK_UP } },
+    { "", char2key('l'), 0, { VK_RIGHT } },
 
-    { "", 0, char2key('a'), 0, { VK_HOME } },
-    { "", 0, char2key('e'), 0, { VK_END } },
+    { "", char2key('a'), 0, { VK_HOME } },
+    { "", char2key('e'), 0, { VK_END } },
 
-    { "Delete word backforward", 0, char2key('w'), 0, {}, "delete_left_word" },
-    { "Delete from cursor to line begin", 0, char2key('u'), 0, {}, "delete_to_line_begin" },
-    { "Delete from cursor to line end", 0, char2key('c'), 0, {}, "delete_to_line_end" },
-    { "Delete current line", 0, char2key('s'), 0, {}, "delete_current_line" },
+    { "Delete word backforward", char2key('w'), 0, {}, "delete_left_word" },
+    { "Delete from cursor to line begin", char2key('u'), 0, {}, "delete_to_line_begin" },
+    { "Delete from cursor to line end", char2key('c'), 0, {}, "delete_to_line_end" },
+    { "Delete current line", char2key('s'), 0, {}, "delete_current_line" },
 
-    { "Insert new blank line after current", 0, char2key('o'), 0, { VK_END, VK_RETURN } },
-    { "Insert new blank line before current", KEY_SHIFT, char2key('o'), 0, {}, "new_line_up" },
+    { "Insert new blank line after current", char2key('o'), 0, { VK_END, VK_RETURN } },
+    { "Insert new blank line before current", char2key('o'), 0, {}, "new_line_up" },
 
-    { "Copy", 0, char2key('y'), KEY_CTRL, { VK_INSERT } },
-    { "Paste", 0, char2key('p'), KEY_SHIFT, { VK_INSERT } },
+    { "Copy", char2key('y'), KEY_CTRL, { VK_INSERT } },
+    { "Paste", char2key('p'), KEY_SHIFT, { VK_INSERT } },
 
-    { "Quit", KEY_SHIFT, char2key('q'), 0, {}, "quit_current_app" },
-    { "Help", KEY_SHIFT, VK_OEM_2 /* ? */, 0, {}, "show_help_window" },
+    { "Quit", char2key('q'), 0, {}, "quit_current_app" },
+    { "Help", VK_OEM_2 /* ? */, 0, {}, "show_help_window" },
 };
 
-static std::map<std::string, KeyHookItem> key2hook_ = ([] {
-    std::map<std::string, KeyHookItem> key2hook;
+static std::map<int, KeyHookItem> key2hook_ = ([] {
+    std::map<int, KeyHookItem> key2hook;
     for (auto it : key_hooks_)
     {
-        key2hook[keyid(it.src_modified, it.src_keycode)] = it;
+        key2hook[it.src_keycode] = it;
     }
     return key2hook;
 })();
@@ -264,20 +263,12 @@ static auto process_keydown(int keycode) -> bool
     }
     else if (capslock_down_time_)
     {
-        if (!is_specified_key(keycode))
+        if (key2hook_.contains(keycode))
         {
-            uint8_t modified = 0;
-            modified |= is_key_pressed(VK_CONTROL) ? KEY_CTRL : 0;
-            modified |= is_key_pressed(VK_MENU) ? KEY_ALT : 0;
-            modified |= is_key_pressed(VK_SHIFT) ? KEY_SHIFT : 0;
-
-            if (auto key = keyid(modified, keycode); key2hook_.contains(key))
-            {
-                const auto &item = key2hook_.at(key);
-                const auto &func = name2func_.contains(item.func) ? name2func_.at(item.func) : nullptr;
-                key_click(item.tar_modified, item.targets, func);
-                return true;
-            }
+            const auto &item = key2hook_.at(keycode);
+            const auto &func = name2func_.contains(item.func) ? name2func_.at(item.func) : nullptr;
+            key_click(item.tar_modified, item.targets, func);
+            return true;
         }
     }
     return false;
@@ -285,25 +276,26 @@ static auto process_keydown(int keycode) -> bool
 
 static auto process_keyup(int keycode) -> bool
 {
-    if (auto capslock_pressed = capslock_down_time_.has_value(); capslock_pressed)
+    if (auto capslock_pressed = capslock_down_time_.has_value(); !capslock_pressed)
     {
-        if (keycode == KEY_CAPSLOCK)
-        {
-            auto duration = duration_cast<milliseconds>(system_clock::now() - capslock_down_time_.value());
-            if (duration <= PRESS_TIMEOUT && !capslock_busy_)
-            {
-                capslock_busy_ = true;
-                key_click(KEY_CAPSLOCK);
-                capslock_busy_ = false;
-            }
-            capslock_down_time_ = std::nullopt;
-        }
-        else if (keycode == VK_LSHIFT || keycode == VK_LMENU)  // ignore input method change
-        {
-            key_up(keycode);
-            return true;
-        }
+        return false;
     }
+    if (keycode == KEY_CAPSLOCK)
+    {
+        auto duration = duration_cast<milliseconds>(system_clock::now() - capslock_down_time_.value());
+        if (duration <= PRESS_TIMEOUT && !capslock_busy_)
+        {
+            capslock_busy_ = true;
+            key_click(KEY_CAPSLOCK);
+            capslock_busy_ = false;
+        }
+        capslock_down_time_ = std::nullopt;
+    }
+    // else if (keycode == VK_LSHIFT || keycode == VK_LMENU)  // ignore input method change
+    //{
+    //    key_up(keycode);
+    //    return true;
+    //}
     return false;
 }
 

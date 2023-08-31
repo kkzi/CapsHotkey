@@ -49,7 +49,8 @@ static auto show_main_window()
     else
     {
         ShowWindow(hwnd_, SW_SHOW);
-        BringWindowToTop(hwnd_);
+        SetForegroundWindow(hwnd_);
+        //BringWindowToTop(hwnd_);
     }
 }
 
@@ -174,6 +175,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     ImGuiDx12::RunOptions opts;
     opts.Icon = icon_logo_;
     opts.Title = APP_ID;
+    opts.Width = 640;
+    opts.Height = 580;
     opts.CmdShow = SW_HIDE;
     ImGuiDx12::Run(opts, [](auto &&win) -> bool {
         hwnd_ = win;

@@ -144,8 +144,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     is_autorun_ = is_app_autorun(APP_ID);
 
     CapsHotkey hotkey;
-    hotkey.register_hook("quit_current_app", quit_current_app);
-    hotkey.register_hook("show_help_window", show_main_window);
+    hotkey.register_hook(char2key('q'), quit_current_app, "Quit CapsHotkey");
+    hotkey.register_hook(VK_OEM_2, show_main_window, "Show help window");
 
     ImGuiDx12::OnMessage(WM_CREATE, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
         create_notification_icon(hWnd);
@@ -186,9 +186,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
                 ImGui::TableSetColumnIndex(0);
                 ImGui::Text("O");
                 ImGui::TableSetColumnIndex(1);
-                ImGui::Text(key2str(item.src_keycode).c_str());
+                ImGui::Text(key2str(item.source).c_str());
                 ImGui::TableSetColumnIndex(2);
-                ImGui::Text((item.desc.empty() ? key2str(item.targets.at(0)) : item.desc).c_str());
+                ImGui::Text(item.desc.c_str());
             }
             ImGui::EndTable();
         }

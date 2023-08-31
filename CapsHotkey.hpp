@@ -16,19 +16,14 @@ using namespace std::chrono_literals;
 using KeyHookFunc = std::function<void(void)>;
 
 static constexpr uint8_t KEY_CAPSLOCK = VK_CAPITAL;  // the modifier key used
-static constexpr uint8_t KEY_CTRL{ 1 };
-static constexpr uint8_t KEY_ALT{ 2 };
-static constexpr uint8_t KEY_SHIFT{ 4 };
-static constexpr uint8_t KEY_WIN{ 8 };
 static constexpr duration PRESS_TIMEOUT{ 300ms };
 
 struct KeyHookItem
 {
+    int source{ 0 };
+    std::vector<std::vector<int>> target_keys{};
+    KeyHookFunc target_func{ nullptr };
     std::string desc;
-    int src_keycode{ 0 };
-    uint8_t tar_modified{ 0 };
-    std::vector<int> targets;
-    std::string func;
 };
 
 enum class HookStatus
@@ -98,25 +93,6 @@ static auto key2str(UCHAR vk) -> std::string
     return szName;
 }
 
-static auto modified2longstr(int modified) -> std::string
-{
-    std::string prefix;
-    prefix += modified & KEY_CTRL ? "Ctrl " : "";
-    prefix += modified & KEY_ALT ? "Alt " : "";
-    prefix += modified & KEY_SHIFT ? "Shift " : "";
-    return prefix;
-}
-
-static auto key_text(int modified, int keycode) -> std::string
-{
-    return modified2longstr(modified) + key2str(keycode);
-}
-
-static auto keyid(uint8_t modified, int keycode) -> std::string
-{
-    return key_text(modified, keycode);
-}
-
 static auto is_key_pressed(int key) -> bool
 {
     return GetKeyState(key) & 0x8000;
@@ -125,7 +101,7 @@ static auto is_key_pressed(int key) -> bool
 static void reset_hook_status();
 static void key_up(int key)
 {
-    log("-- keyup {}", key2str(key));
+    log("--keyup {}", key2str(key));
 
     if (key == KEY_CAPSLOCK)
     {
@@ -173,8 +149,8 @@ static void key_click(const std::vector<int> &arr)
         inputs[upi].ki.wVk = key;
         inputs[upi].ki.dwFlags = KEYEVENTF_KEYUP;
     }
-    log("!!{}, hooking={}", txt, capslock_hook_.has_value());
-    auto n = SendInput(len, inputs, sizeof(INPUT));
+    log("--key click: {}", txt);
+    auto n = SendInput((UINT)len, inputs, (UINT)sizeof(INPUT));
     delete[] inputs;
 }
 
@@ -202,79 +178,47 @@ static void key_click(int key)
     key_click(std::vector<int>{ key });
 }
 
-static std::map<std::string, KeyHookFunc> name2func_{
-    {
-        "delete_left_word",
-        [] {
-            key_click({ VK_LCONTROL, VK_LSHIFT, VK_LEFT });
-            key_click({ VK_LCONTROL, VK_INSERT });
-            key_click({ VK_DELETE });
-        },
-    },
-    {
-        "delete_to_line_begin",
-        [] {
-            key_click({ VK_SHIFT, VK_HOME });
-            key_click({ VK_CONTROL, VK_INSERT });
-            key_click({ VK_DELETE });
-        },
-    },
-    {
-        "delete_to_line_end",
-        [] {
-            key_click({ VK_SHIFT, VK_END });
-            key_click({ VK_CONTROL, VK_INSERT });
-            key_click({ VK_DELETE });
-        },
-    },
-    {
-        "delete_current_line",
-        [] {
-            key_click(VK_HOME);
-            key_click({ VK_SHIFT, VK_END });
-            key_click({ VK_CONTROL, VK_INSERT });
-            key_click({ VK_DELETE });
-        },
-    },
-    {
-        "new_line_up",
-        [] {
-            key_click(VK_HOME);
-            key_click(VK_RETURN);
-            key_click(VK_UP);
-        },
-    },
-};
-
 static std::vector<KeyHookItem> key_hooks_{
-    { "", char2key('h'), 0, { VK_LEFT } },
-    { "", char2key('j'), 0, { VK_DOWN } },
-    { "", char2key('k'), 0, { VK_UP } },
-    { "", char2key('l'), 0, { VK_RIGHT } },
+    { char2key('h'), { { VK_LEFT } } },
+    { char2key('j'), { { VK_DOWN } } },
+    { char2key('k'), { { VK_UP } } },
+    { char2key('l'), { { VK_RIGHT } } },
+    { char2key('n'), { { VK_DOWN } } },
+    { char2key('p'), { { VK_UP } } },
+    { char2key('a'), { { VK_HOME } } },
+    { char2key('e'), { { VK_END } } },
+    { char2key('b'), { { VK_CONTROL, VK_LEFT } } },
+    { char2key('f'), { { VK_CONTROL, VK_RIGHT } } },
 
-    { "", char2key('a'), 0, { VK_HOME } },
-    { "", char2key('e'), 0, { VK_END } },
+    { char2key('w'), { { VK_LCONTROL, VK_LSHIFT, VK_LEFT }, { VK_LCONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete word backforward" },
+    { char2key('u'), { { VK_SHIFT, VK_HOME }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete from cursor to line begin" },
+    { char2key('c'), { { VK_SHIFT, VK_END }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "" },
+    { char2key('s'), { { VK_HOME }, { VK_SHIFT, VK_END }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete current line" },
+    { char2key('o'), { { VK_HOME }, { VK_RETURN }, { VK_UP } }, nullptr, "Insert new blank line before current" },
+    //{ char2key('o'), { { VK_END, VK_RETURN } }, nullptr, "Insert new blank line after current" },
 
-    { "Delete word backforward", char2key('w'), 0, {}, "delete_left_word" },
-    { "Delete from cursor to line begin", char2key('u'), 0, {}, "delete_to_line_begin" },
-    { "Delete from cursor to line end", char2key('c'), 0, {}, "delete_to_line_end" },
-    { "Delete current line", char2key('s'), 0, {}, "delete_current_line" },
-
-    { "Insert new blank line after current", char2key('o'), 0, { VK_END, VK_RETURN } },
-    { "Insert new blank line before current", char2key('o'), 0, {}, "new_line_up" },
-
-    { "Copy", char2key('y'), KEY_CTRL, { VK_INSERT } },
-    { "Paste", char2key('p'), KEY_SHIFT, { VK_INSERT } },
-
-    { "Quit", char2key('q'), 0, {}, "quit_current_app" },
-    { "Help", VK_OEM_2 /* ? */, 0, {}, "show_help_window" },
+    { char2key('y'), { { VK_CONTROL, VK_INSERT } } },
+    { char2key('p'), { { VK_SHIFT, VK_INSERT } } },
 };
 
 static std::map<int, KeyHookItem> key2hook_ = ([] {
     std::map<int, KeyHookItem> key2hook;
     for (auto it : key_hooks_)
     {
-        key2hook[it.src_keycode] = it;
+        if (it.desc.empty())
+        {
+            std::stringstream ss;
+            for (auto &&one : it.target_keys)
+            {
+                for (auto &&k : one)
+                {
+                    ss << key2str(k) << " ";
+                }
+                ss << ", ";
+            }
+            it.desc = ss.str();
+        }
+        key2hook[it.source] = it;
     }
     return key2hook;
 })();
@@ -310,30 +254,15 @@ static auto hook_capslock(WPARAM wParam) -> bool
 
 static auto process_hotkey(const KeyHookItem &item)
 {
-    if (!item.func.empty() && name2func_.contains(item.func))
+    if (item.target_func != nullptr)
     {
-        name2func_.at(item.func)();
+        item.target_func();
         return;
     }
 
-    if (item.targets.empty())
+    for (auto &&one : item.target_keys)
     {
-        return;
-    }
-
-    for (auto &&k : item.targets)
-    {
-        // var arr = new List<VirtualKey>();
-        // if ((it.Modified & ModifiedKey.Ctrl) == ModifiedKey.Ctrl)
-        //    arr.Add(VirtualKey.Control);
-        // if ((it.Modified & ModifiedKey.Alt) == ModifiedKey.Alt)
-        //    arr.Add(VirtualKey.Menu);
-        // if ((it.Modified & ModifiedKey.Shift) == ModifiedKey.Shift)
-        //    arr.Add(VirtualKey.LeftShift);
-        // if ((it.Modified & ModifiedKey.Win) == ModifiedKey.Win)
-        //    arr.Add(VirtualKey.LeftWindows);
-        // arr.AddRange(it.Keys);
-        key_click(item.targets);
+        key_click(one);
     }
 }
 
@@ -346,23 +275,31 @@ static auto hook_other_key(int key, WPARAM wParam) -> bool
 
     auto keydown = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
     auto state = keydown ? "down" : "up";
-    if (key == VK_LSHIFT && !keydown && status_ == HookStatus::Hooking)
-    {
-        return true;
-    }
+    // if (key == VK_LSHIFT && !keydown && status_ == HookStatus::Hooking)
+    //{
+    //    log("ignore {} {}", key2str(key), state);
+    //    return true;
+    //}
 
     if (modified_pressed_.contains(key))
     {
         auto old = modified_pressed_[key] == keydown;
         modified_pressed_[key] = keydown;
-        return old && status_ == HookStatus::Hooking;
+        auto ignored = old && status_ == HookStatus::Hooking;
+        if (ignored)
+        {
+            log("ignore {} {}", key2str(key), state);
+        }
+        return ignored;
     }
 
     if (keydown && status_ != HookStatus::Hooking && key2hook_.contains(key))
     {
+        log("hook {} {}", key2str(key), state);
         status_ = HookStatus::Hooking;
         process_hotkey(key2hook_.at(key));
         status_ = HookStatus::Hooked;
+        log("hook down");
         return true;
     }
     return false;
@@ -390,6 +327,7 @@ static auto process_hook_keyboard(int nCode, WPARAM wParam, LPARAM lParam) -> LR
             return TRUE;
         }
     }
+    log("##key {} {}", key2str(keycode), wParam == WM_KEYUP ? "up" : "down");
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
@@ -408,9 +346,9 @@ public:
     }
 
 public:
-    void register_hook(std::string_view name, const KeyHookFunc &func)
+    void register_hook(int keycode, const KeyHookFunc &func, std::string_view desc)
     {
-        name2func_[std::string(name)] = func;
+        key2hook_[keycode] = KeyHookItem{ keycode, {}, func, std::string{ desc } };
     }
 
 private:

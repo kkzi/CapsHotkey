@@ -184,7 +184,6 @@ static std::vector<KeyHookItem> key_hooks_{
     { char2key('k'), { { VK_UP } } },
     { char2key('l'), { { VK_RIGHT } } },
     { char2key('n'), { { VK_DOWN } } },
-    { char2key('p'), { { VK_UP } } },
     { char2key('a'), { { VK_HOME } } },
     { char2key('e'), { { VK_END } } },
     { char2key('b'), { { VK_CONTROL, VK_LEFT } } },
@@ -199,6 +198,10 @@ static std::vector<KeyHookItem> key_hooks_{
 
     { char2key('y'), { { VK_CONTROL, VK_INSERT } } },
     { char2key('p'), { { VK_SHIFT, VK_INSERT } } },
+
+    { VK_OEM_COMMA, { { VK_CONTROL, VK_SHIFT, VK_TAB } } },
+    { VK_OEM_PERIOD, { { VK_CONTROL, VK_TAB } } },
+
 };
 
 static std::map<int, KeyHookItem> key2hook_ = ([] {

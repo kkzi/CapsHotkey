@@ -3,7 +3,7 @@ Use capslock key do more
 
 ## hotkey mappings
 | Key | Desc|
-----
+|:---|:----|
 | [Capslock] + A | Home |
 | [Capslock] + B | Backford |
 | [Capslock] + C | Delete from cursor to line end |
@@ -23,4 +23,10 @@ Use capslock key do more
 
 
 ## download
-![CapsHotkey.exe](https://github.com/kkzi/CapsHotkey/releases/download/v2.1/CapsHotkey.exe)
+[CapsHotkey.exe](https://github.com/kkzi/CapsHotkey/releases/download/v2.1/CapsHotkey.exe)
+
+
+## alternative
+- [Caplos](https://github.com/pluveto/Caplos/)
+- [Caplos Modified](https://github.com/kkzi/Caplos/)
+- [Capslock+](https://capslox.com/capslock-plus/)

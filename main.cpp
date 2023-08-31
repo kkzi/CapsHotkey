@@ -43,6 +43,7 @@ static auto quit_current_app()
 static auto show_main_window()
 {
     ShowWindow(hwnd_, SW_SHOW);
+    BringWindowToTop(hwnd_);
 }
 
 static auto set_autorun_enabled()

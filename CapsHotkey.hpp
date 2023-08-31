@@ -22,9 +22,6 @@ static constexpr uint8_t KEY_SHIFT{ 4 };
 static constexpr uint8_t KEY_WIN{ 8 };
 static constexpr duration PRESS_TIMEOUT{ 300ms };
 
-static bool capslock_busy_{ false };
-static std::optional<time_point<system_clock>> capslock_down_time_{ std::nullopt };
-
 struct KeyHookItem
 {
     std::string desc;
@@ -34,13 +31,32 @@ struct KeyHookItem
     std::string func;
 };
 
-// static std::ofstream logfile_("log.txt", std::ios::trunc);
-template <class... Args>
-static void log(std::string_view &&fmt, Args &&...args)
+enum class HookStatus
 {
-    // std::cout << std::vformat(fmt, std::make_format_args(args...)) << std::endl;
-    // logfile_ << std::vformat(fmt, std::make_format_args(args...)) << std::endl;
-    // logfile_.flush();
+    Normal = 0,
+    Hooking = 1,
+    Hooked = 2,
+};
+
+static HookStatus status_{ HookStatus::Normal };
+static bool capslock_busy_{ false };
+static bool capslock_pressed_{ false };
+static std::optional<KeyHookItem> capslock_hook_{ std::nullopt };
+static std::optional<time_point<system_clock>> capslock_pressed_time_{ std::nullopt };
+
+static std::map<int, bool> modified_pressed_{
+    { VK_LCONTROL, false },
+    { VK_LMENU, false },
+    { VK_LSHIFT, false },
+    { VK_LWIN, false },
+};
+
+template <class T, class... Args>
+static void log(const T *fmt, Args &&...args)
+{
+    auto line = std::vformat(fmt, std::make_format_args(args...));
+    OutputDebugStringA(line.c_str());
+    OutputDebugStringA("\n");
 }
 
 // a function from ascii to key codes
@@ -106,112 +122,128 @@ static auto is_key_pressed(int key) -> bool
     return GetKeyState(key) & 0x8000;
 }
 
-static auto is_specified_key(int key) -> bool
+static void reset_hook_status();
+static void key_up(int key)
 {
-    static std::vector<int> specified_keys{
-        VK_CAPITAL,
-        VK_SHIFT,
-        VK_LSHIFT,
-        VK_RSHIFT,
-        VK_CONTROL,
-        VK_MENU,
-        VK_LMENU,
-        VK_RMENU,
-        VK_LWIN,
-        VK_RWIN,
-        VK_ESCAPE,
-    };
-    return std::find(specified_keys.begin(), specified_keys.end(), key) != specified_keys.end();
-}
+    log("-- keyup {}", key2str(key));
 
-static auto key_up(int key)
-{
-    // log("{:#x} key up", key);
-    keybd_event(key, 0, KEYEVENTF_KEYUP, 0);
-}
-
-static auto key_down(int key)
-{
-    // log("{:#x} key down", key);
-    static constexpr int KEYEVENTF_KEYDOWN = 0;  // why doesn't that already exist???
-    keybd_event(key, 0, KEYEVENTF_KEYDOWN, 0);
-}
-
-static auto key_click(auto key)
-{
-    key_down(key);
-    key_up(key);
-}
-
-static auto key_click(uint8_t modified, std::vector<int> keys, const KeyHookFunc &func = nullptr)
-{
-    if (modified & KEY_CTRL)
-        key_down(VK_CONTROL);
-    if (modified & KEY_ALT)
-        key_down(VK_MENU);
-    if (modified & KEY_SHIFT)
-        key_down(VK_SHIFT);
-    if (modified & KEY_WIN)
-        key_down(VK_LWIN);
-
-    for (auto &&key : keys)
+    if (key == KEY_CAPSLOCK)
     {
-        key_click(key);
+        reset_hook_status();
     }
-    if (func)
+    if (modified_pressed_.contains(key))
     {
-        func();
+        modified_pressed_[key] = false;
     }
 
-    if (modified & KEY_CTRL)
-        key_up(VK_CONTROL);
-    if (modified & KEY_ALT)
-        key_up(VK_MENU);
-    if (modified & KEY_SHIFT)
-        key_up(VK_SHIFT);
-    if (modified & KEY_WIN)
-        key_up(VK_LWIN);
+    INPUT inputs[1]{};
+    inputs[0].type = 1;
+    inputs[0].ki.wVk = (short)key;
+    inputs[0].ki.dwFlags = 2;
+    SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
+}
+
+static void key_down(int key)
+{
+    log("-- keydown {}", key2str(key));
+    INPUT inputs[1]{};
+    inputs[0].type = 1;
+    inputs[0].ki.wVk = (short)key;
+    SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
+}
+
+static void key_click(const std::vector<int> &arr)
+{
+    if (arr.empty())
+        return;
+
+    auto len = arr.size() * 2;
+    auto inputs = new INPUT[len]{ 0 };
+    std::string txt;
+    for (auto i = 0; i < arr.size(); ++i)
+    {
+        auto key = arr[i];
+        txt += key2str(key);
+        auto upi = len - 1 - i;
+
+        inputs[i].type = 1;
+        inputs[i].ki.wVk = key;
+
+        inputs[upi].type = 1;
+        inputs[upi].ki.wVk = key;
+        inputs[upi].ki.dwFlags = KEYEVENTF_KEYUP;
+    }
+    log("!!{}, hooking={}", txt, capslock_hook_.has_value());
+    auto n = SendInput(len, inputs, sizeof(INPUT));
+    delete[] inputs;
+}
+
+static void reset_modifies()
+{
+    for (auto &&[k, v] : modified_pressed_)
+    {
+        if (v)
+        {
+            key_up(k);
+        }
+    }
+}
+
+static void reset_hook_status()
+{
+    reset_modifies();
+    capslock_pressed_time_ = std::nullopt;
+    capslock_pressed_ = false;
+    status_ = HookStatus::Normal;
+}
+
+static void key_click(int key)
+{
+    key_click(std::vector<int>{ key });
 }
 
 static std::map<std::string, KeyHookFunc> name2func_{
     {
         "delete_left_word",
         [] {
-            key_click(KEY_CTRL | KEY_SHIFT, { VK_LEFT });
-            key_click(KEY_CTRL, { char2key('x') });
+            key_click({ VK_LCONTROL, VK_LSHIFT, VK_LEFT });
+            key_click({ VK_LCONTROL, VK_INSERT });
+            key_click({ VK_DELETE });
         },
     },
     {
         "delete_to_line_begin",
         [] {
-            key_click(KEY_SHIFT, { VK_HOME });
-            key_click(VK_CONTROL, { char2key('x') });
+            key_click({ VK_SHIFT, VK_HOME });
+            key_click({ VK_CONTROL, VK_INSERT });
+            key_click({ VK_DELETE });
         },
     },
     {
         "delete_to_line_end",
         [] {
-            key_click(KEY_SHIFT, { VK_END });
-            key_click(VK_CONTROL, { char2key('x') });
+            key_click({ VK_SHIFT, VK_END });
+            key_click({ VK_CONTROL, VK_INSERT });
+            key_click({ VK_DELETE });
         },
     },
     {
         "delete_current_line",
         [] {
             key_click(VK_HOME);
-            key_click(KEY_SHIFT, { VK_END });
-            key_click(VK_CONTROL, { char2key('x') });
+            key_click({ VK_SHIFT, VK_END });
+            key_click({ VK_CONTROL, VK_INSERT });
+            key_click({ VK_DELETE });
         },
     },
     {
         "new_line_up",
         [] {
-            key_up(VK_SHIFT);
             key_click(VK_HOME);
             key_click(VK_RETURN);
+            key_click(VK_UP);
         },
     },
-
 };
 
 static std::vector<KeyHookItem> key_hooks_{
@@ -247,55 +279,92 @@ static std::map<int, KeyHookItem> key2hook_ = ([] {
     return key2hook;
 })();
 
-static auto process_keydown(int keycode) -> bool
+static auto hook_capslock(WPARAM wParam) -> bool
 {
-    if (keycode == KEY_CAPSLOCK)
-    {
-        if (!capslock_down_time_)
-        {
-            capslock_down_time_ = system_clock::now();
-            return true;
-        }
-        else if (!capslock_busy_)
-        {
-            return true;
-        }
-    }
-    else if (capslock_down_time_)
-    {
-        if (key2hook_.contains(keycode))
-        {
-            const auto &item = key2hook_.at(keycode);
-            const auto &func = name2func_.contains(item.func) ? name2func_.at(item.func) : nullptr;
-            key_click(item.tar_modified, item.targets, func);
-            return true;
-        }
-    }
-    return false;
-}
-
-static auto process_keyup(int keycode) -> bool
-{
-    if (auto capslock_pressed = capslock_down_time_.has_value(); !capslock_pressed)
+    if (capslock_busy_)
     {
         return false;
     }
-    if (keycode == KEY_CAPSLOCK)
+    if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
     {
-        auto duration = duration_cast<milliseconds>(system_clock::now() - capslock_down_time_.value());
-        if (duration <= PRESS_TIMEOUT && !capslock_busy_)
+        capslock_pressed_ = true;
+        if (!capslock_pressed_time_)
+        {
+            capslock_pressed_time_ = system_clock::now();
+            log("capslock pressed");
+        }
+    }
+    else
+    {
+        auto duration = duration_cast<milliseconds>(system_clock::now() - *capslock_pressed_time_);
+        if (duration <= PRESS_TIMEOUT && status_ == HookStatus::Normal)
         {
             capslock_busy_ = true;
             key_click(KEY_CAPSLOCK);
             capslock_busy_ = false;
         }
-        capslock_down_time_ = std::nullopt;
+        reset_hook_status();
     }
-    // else if (keycode == VK_LSHIFT || keycode == VK_LMENU)  // ignore input method change
-    //{
-    //    key_up(keycode);
-    //    return true;
-    //}
+    return true;
+}
+
+static auto process_hotkey(const KeyHookItem &item)
+{
+    if (!item.func.empty() && name2func_.contains(item.func))
+    {
+        name2func_.at(item.func)();
+        return;
+    }
+
+    if (item.targets.empty())
+    {
+        return;
+    }
+
+    for (auto &&k : item.targets)
+    {
+        // var arr = new List<VirtualKey>();
+        // if ((it.Modified & ModifiedKey.Ctrl) == ModifiedKey.Ctrl)
+        //    arr.Add(VirtualKey.Control);
+        // if ((it.Modified & ModifiedKey.Alt) == ModifiedKey.Alt)
+        //    arr.Add(VirtualKey.Menu);
+        // if ((it.Modified & ModifiedKey.Shift) == ModifiedKey.Shift)
+        //    arr.Add(VirtualKey.LeftShift);
+        // if ((it.Modified & ModifiedKey.Win) == ModifiedKey.Win)
+        //    arr.Add(VirtualKey.LeftWindows);
+        // arr.AddRange(it.Keys);
+        key_click(item.targets);
+    }
+}
+
+static auto hook_other_key(int key, WPARAM wParam) -> bool
+{
+    if (!capslock_pressed_)
+    {
+        return false;
+    }
+
+    auto keydown = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
+    auto state = keydown ? "down" : "up";
+    if (key == VK_LSHIFT && !keydown && status_ == HookStatus::Hooking)
+    {
+        return true;
+    }
+
+    if (modified_pressed_.contains(key))
+    {
+        auto old = modified_pressed_[key] == keydown;
+        modified_pressed_[key] = keydown;
+        return old && status_ == HookStatus::Hooking;
+    }
+
+    if (keydown && status_ != HookStatus::Hooking && key2hook_.contains(key))
+    {
+        status_ = HookStatus::Hooking;
+        process_hotkey(key2hook_.at(key));
+        status_ = HookStatus::Hooked;
+        return true;
+    }
     return false;
 }
 
@@ -307,18 +376,19 @@ static auto process_hook_keyboard(int nCode, WPARAM wParam, LPARAM lParam) -> LR
     }
 
     auto keycode = ((KBDLLHOOKSTRUCT *)lParam)->vkCode;
-    switch (wParam)
+    if (keycode == KEY_CAPSLOCK)
     {
-    case WM_KEYDOWN:
-        if (process_keydown(keycode))
+        if (hook_capslock(wParam))
+        {
             return TRUE;
-        break;
-    case WM_KEYUP:
-        if (process_keyup(keycode))
+        }
+    }
+    else
+    {
+        if (hook_other_key(keycode, wParam))
+        {
             return TRUE;
-        break;
-    default:
-        break;
+        }
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }

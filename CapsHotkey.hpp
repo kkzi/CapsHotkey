@@ -89,7 +89,7 @@ static auto key2str(UCHAR vk) -> std::string
         result = GetKeyNameTextA(scancode << 16, szName, 128);
     }
     if (result == 0)
-        throw std::system_error(std::error_code(GetLastError(), std::system_category()), "WinAPI Error occured.");
+        itoa((int)vk, szName, 10);
     return szName;
 }
 
@@ -198,6 +198,8 @@ static std::vector<KeyHookItem> key_hooks_{
 
     { char2key('y'), { { VK_CONTROL, VK_INSERT } } },
     { char2key('p'), { { VK_SHIFT, VK_INSERT } } },
+
+    { char2key('m'), { { VK_SHIFT, VK_F10 } } },
 
     { VK_OEM_COMMA, { { VK_CONTROL, VK_SHIFT, VK_TAB } } },
     { VK_OEM_PERIOD, { { VK_CONTROL, VK_TAB } } },

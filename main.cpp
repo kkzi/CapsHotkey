@@ -4,7 +4,7 @@
 #include <iostream>
 #include <simple/use_imgui_dx12.hpp>
 
-constexpr const wchar_t *APP_ID{ TEXT("Caps Hotkey v2") };
+constexpr const wchar_t *APP_ID{ TEXT("Caps Hotkey v2.1") };
 
 enum class MenuAction : uint8_t
 {
@@ -178,9 +178,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     ImGuiDx12::Run(opts, [](auto &&win) -> bool {
         hwnd_ = win;
 
-        ImGui::Text("Capslock Hotkey Mappings");
+        ImGui::Text("Capslock Hotkey Mappings\n");
         auto flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY;
-        if (ImGui::BeginTable("MAPPINGS", 3, flags))
+        if (ImGui::BeginTable("MAPPINGS", 3, flags, { 0, 400 }))
         {
             ImGui::TableSetupColumn("CAPSLOCK", ImGuiTableColumnFlags_WidthFixed, 100);
             ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 100);
@@ -198,6 +198,18 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
                 ImGui::Text(item.desc.c_str());
             }
             ImGui::EndTable();
+        }
+        ImGui::Text("\n");
+        ImGui::Text("Open Source");
+        ImGui::Bullet();
+        if (ImGui::Button("kkzi/capshotkey"))
+        {
+            ShellExecuteA(NULL, "open", "https://github.com/kkzi/capshotkey", NULL, NULL, SW_SHOWNORMAL);
+        }
+        ImGui::Bullet();
+        if (ImGui::Button("ocornut/imgui"))
+        {
+            ShellExecuteA(NULL, "open", "https://github.com/ocornut/imgui", NULL, NULL, SW_SHOWNORMAL);
         }
         return true;
     });

@@ -237,7 +237,7 @@ static auto hook_capslock(WPARAM wParam) -> bool
             log("capslock pressed");
         }
     }
-    else
+    else if (capslock_pressed_time_)
     {
         auto duration = duration_cast<milliseconds>(system_clock::now() - *capslock_pressed_time_);
         if (duration <= PRESS_TIMEOUT && status_ == HookStatus::Normal)

@@ -192,7 +192,7 @@ static std::vector<KeyHookItem> key_hooks_{
 
     { char2key('w'), { { VK_LCONTROL, VK_LSHIFT, VK_LEFT }, { VK_LCONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete word backforward" },
     { char2key('u'), { { VK_SHIFT, VK_HOME }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete from cursor to line begin" },
-    { char2key('c'), { { VK_SHIFT, VK_END }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "" },
+    { char2key('c'), { { VK_SHIFT, VK_END }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete from cursor to line end" },
     { char2key('s'), { { VK_HOME }, { VK_SHIFT, VK_END }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete current line" },
     { char2key('o'), { { VK_HOME }, { VK_RETURN }, { VK_UP } }, nullptr, "Insert new blank line before current" },
     //{ char2key('o'), { { VK_END, VK_RETURN } }, nullptr, "Insert new blank line after current" },
@@ -214,7 +214,6 @@ static std::map<int, KeyHookItem> key2hook_ = ([] {
                 {
                     ss << key2str(k) << " ";
                 }
-                ss << ", ";
             }
             it.desc = ss.str();
         }

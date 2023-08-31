@@ -42,8 +42,15 @@ static auto quit_current_app()
 
 static auto show_main_window()
 {
-    ShowWindow(hwnd_, SW_SHOW);
-    BringWindowToTop(hwnd_);
+    if (IsWindowVisible(hwnd_))
+    {
+        ShowWindow(hwnd_, SW_HIDE);
+    }
+    else
+    {
+        ShowWindow(hwnd_, SW_SHOW);
+        BringWindowToTop(hwnd_);
+    }
 }
 
 static auto set_autorun_enabled()
@@ -180,7 +187,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
             ImGui::TableSetupColumn("Desc.", ImGuiTableColumnFlags_WidthStretch, 0);
             ImGui::TableHeadersRow();
 
-            for (auto &&item : key_hooks_)
+            for (auto &&[key, item] : key2hook_)
             {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);

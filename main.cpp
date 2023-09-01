@@ -54,6 +54,16 @@ static auto show_main_window()
     }
 }
 
+static auto simulate_mouse_down()
+{
+    mouse_event(MOUSEEVENTF_WHEEL, 0, 0, -WHEEL_DELTA * 3, 0);
+}
+
+static auto simulate_mouse_up()
+{
+    mouse_event(MOUSEEVENTF_WHEEL, 0, 0, WHEEL_DELTA * 3, 0);
+}
+
 static auto set_autorun_enabled()
 {
     if (set_app_autorun(APP_ID, app_path_.data(), !is_autorun_))
@@ -152,8 +162,10 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     is_autorun_ = is_app_autorun(APP_ID);
 
     CapsHotkey hotkey;
-    hotkey.register_hook(char2key('q'), quit_current_app, "Quit CapsHotkey");
+    hotkey.register_hook(VK_OEM_7, simulate_mouse_up, "Mouse up");
+    hotkey.register_hook(VK_OEM_1, simulate_mouse_down, "Mouse down");
     hotkey.register_hook(VK_OEM_2, show_main_window, "Show help window");
+    hotkey.register_hook(char2key('q'), quit_current_app, "Quit CapsHotkey");
 
     ImGuiDx::OnMessage(WM_CREATE, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
         create_notification_icon(hWnd);
@@ -182,10 +194,9 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         hwnd_ = win;
         ImGui::Text("Capslock Hotkey Mappings\n");
         auto flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY;
-        if (ImGui::BeginTable("MAPPINGS", 3, flags, { 0, 400 }))
+        if (ImGui::BeginTable("MAPPINGS", 2, flags, { 0, 400 }))
         {
-            ImGui::TableSetupColumn("CAPSLOCK", ImGuiTableColumnFlags_WidthFixed, 100);
-            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 100);
+            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 140);
             ImGui::TableSetupColumn("Desc.", ImGuiTableColumnFlags_WidthStretch, 0);
             ImGui::TableHeadersRow();
 
@@ -193,10 +204,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
             {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("O");
+                ImGui::Text(std::format("[Capslock] + {}", key2str(item.source)).c_str());
                 ImGui::TableSetColumnIndex(1);
-                ImGui::Text(key2str(item.source).c_str());
-                ImGui::TableSetColumnIndex(2);
                 ImGui::Text(item.desc.c_str());
             }
             ImGui::EndTable();
@@ -204,7 +213,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         ImGui::Text("\n");
         ImGui::Text("Open Source");
         ImGui::Bullet();
-        if (ImGui::Button("kkzi/capshotkey"))
+        if (ImGui::Button("kkzi/CapsHotkey"))
         {
             ShellExecuteA(NULL, "open", "https://github.com/kkzi/capshotkey", NULL, NULL, SW_SHOWNORMAL);
         }
@@ -215,6 +224,13 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         }
         return true;
     });
+
+    // MSG msg;
+    // while (GetMessage(&msg, NULL, 0, 0) > 0)
+    //{
+    //    TranslateMessage(&msg);  //转换
+    //    DispatchMessage(&msg);   //分发
+    //}
 
     // logfile_.close();
     DestroyIcon(icon_logo_);

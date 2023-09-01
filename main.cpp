@@ -2,9 +2,9 @@
 #include "CapsHotkey.hpp"
 #include "res/resource.h"
 #include <iostream>
-#include <simple/use_imgui_dx12.hpp>
+#include <simple/use_imgui_dx11.hpp>
 
-constexpr const wchar_t *APP_ID{ TEXT("Caps Hotkey v2.1") };
+constexpr const wchar_t *APP_ID{ TEXT("Caps Hotkey v2.2") };
 
 enum class MenuAction : uint8_t
 {
@@ -50,7 +50,7 @@ static auto show_main_window()
     {
         ShowWindow(hwnd_, SW_SHOW);
         SetForegroundWindow(hwnd_);
-        //BringWindowToTop(hwnd_);
+        // BringWindowToTop(hwnd_);
     }
 }
 
@@ -155,32 +155,31 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     hotkey.register_hook(char2key('q'), quit_current_app, "Quit CapsHotkey");
     hotkey.register_hook(VK_OEM_2, show_main_window, "Show help window");
 
-    ImGuiDx12::OnMessage(WM_CREATE, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
+    ImGuiDx::OnMessage(WM_CREATE, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
         create_notification_icon(hWnd);
         return 0;
     });
-    ImGuiDx12::OnMessage(WM_COMMAND, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
+    ImGuiDx::OnMessage(WM_COMMAND, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
         process_action_msg(hwnd_, wParam);
         return 0;
     });
-    ImGuiDx12::OnMessage(WM_USER + 1, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
+    ImGuiDx::OnMessage(WM_USER + 1, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
         process_notification_icon_message(hwnd_, lParam);
         return 0;
     });
-    ImGuiDx12::OnMessage(WM_CLOSE, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
+    ImGuiDx::OnMessage(WM_CLOSE, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
         ShowWindow(hwnd_, SW_HIDE);
         return 0;
     });
 
-    ImGuiDx12::RunOptions opts;
+    ImGuiDx::RunOptions opts;
     opts.Icon = icon_logo_;
     opts.Title = APP_ID;
     opts.Width = 640;
     opts.Height = 580;
     opts.CmdShow = SW_HIDE;
-    ImGuiDx12::Run(opts, [](auto &&win) -> bool {
+    ImGuiDx::Run(opts, [](auto &&win) -> bool {
         hwnd_ = win;
-
         ImGui::Text("Capslock Hotkey Mappings\n");
         auto flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY;
         if (ImGui::BeginTable("MAPPINGS", 3, flags, { 0, 400 }))

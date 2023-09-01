@@ -188,6 +188,10 @@ static std::vector<KeyHookItem> key_hooks_{
     { char2key('e'), { { VK_END } } },
     { char2key('b'), { { VK_CONTROL, VK_LEFT } } },
     { char2key('f'), { { VK_CONTROL, VK_RIGHT } } },
+    { char2key('d'), { { VK_DELETE } } },
+    { char2key('y'), { { VK_CONTROL, VK_INSERT } } },
+    { char2key('p'), { { VK_SHIFT, VK_INSERT } } },
+    { char2key('m'), { { VK_SHIFT, VK_F10 } } },
 
     { char2key('w'), { { VK_LCONTROL, VK_LSHIFT, VK_LEFT }, { VK_LCONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete word backforward" },
     { char2key('u'), { { VK_SHIFT, VK_HOME }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete from cursor to line begin" },
@@ -195,11 +199,6 @@ static std::vector<KeyHookItem> key_hooks_{
     { char2key('s'), { { VK_HOME }, { VK_SHIFT, VK_END }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete current line" },
     { char2key('o'), { { VK_HOME }, { VK_RETURN }, { VK_UP } }, nullptr, "Insert new blank line before current" },
     //{ char2key('o'), { { VK_END, VK_RETURN } }, nullptr, "Insert new blank line after current" },
-
-    { char2key('y'), { { VK_CONTROL, VK_INSERT } } },
-    { char2key('p'), { { VK_SHIFT, VK_INSERT } } },
-
-    { char2key('m'), { { VK_SHIFT, VK_F10 } } },
 
     { VK_OEM_COMMA, { { VK_CONTROL, VK_SHIFT, VK_TAB } } },
     { VK_OEM_PERIOD, { { VK_CONTROL, VK_TAB } } },

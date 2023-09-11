@@ -1,10 +1,15 @@
 ﻿#include "AppAutoRun.hpp"
 #include "CapsHotkey.hpp"
 #include "res/resource.h"
+#include <filesystem>
 #include <iostream>
+#include <locale>
+#include <ranges>
+#include <simple/str.hpp>
 #include <simple/use_imgui_dx11.hpp>
 
-constexpr const wchar_t *APP_ID{ TEXT("Caps Hotkey v2.2") };
+constexpr auto APP_ID{ TEXT("Capslock Hotkey\0") };
+constexpr auto APP_VERSION{ TEXT("v2.3\0") };
 
 enum class MenuAction : uint8_t
 {
@@ -17,13 +22,6 @@ static std::wstring app_path_;
 static bool is_autorun_{ false };
 static HWND hwnd_{ 0 };
 static HICON icon_logo_{ 0 };
-
-static auto get_bitmap(HICON icon) -> HBITMAP
-{
-    ICONINFO iconinfo;
-    GetIconInfo(icon, &iconinfo);
-    return iconinfo.hbmColor;
-}
 
 static auto quit_current_app()
 {
@@ -151,22 +149,8 @@ LRESULT CALLBACK process_message(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
+auto run_imgui_loop()
 {
-    icon_logo_ = LoadIcon(hInst, MAKEINTRESOURCE(IDI_ICON2));
-    app_path_ = []() -> std::wstring {
-        std::wstring path(MAX_PATH, 0);
-        GetModuleFileName(NULL, path.data(), (DWORD)path.size());
-        return path;
-    }();
-    is_autorun_ = is_app_autorun(APP_ID);
-
-    CapsHotkey hotkey;
-    hotkey.register_hook(VK_OEM_7, simulate_mouse_up, "Mouse up");
-    hotkey.register_hook(VK_OEM_1, simulate_mouse_down, "Mouse down");
-    hotkey.register_hook(VK_OEM_2, show_main_window, "Show help window");
-    hotkey.register_hook(char2key('q'), quit_current_app, "Quit CapsHotkey");
-
     ImGuiDx::OnMessage(WM_CREATE, [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
         create_notification_icon(hWnd);
         return 0;
@@ -192,7 +176,8 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     opts.CmdShow = SW_HIDE;
     ImGuiDx::Run(opts, [](auto &&win) -> bool {
         hwnd_ = win;
-        ImGui::Text("Capslock Hotkey Mappings\n");
+        auto caption = std::format(L"{} {} Mappings\n", APP_ID, APP_VERSION);
+        ImGui::Text(str::narrow(caption).data());
         auto flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY;
         if (ImGui::BeginTable("MAPPINGS", 2, flags, { 0, 400 }))
         {
@@ -204,7 +189,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
             {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text(std::format("[Capslock] + {}", key2str(item.source)).c_str());
+                ImGui::Text(std::format("[Capslock] + {}", KeyCodes::key2str(item.source)).c_str());
                 ImGui::TableSetColumnIndex(1);
                 ImGui::Text(item.desc.c_str());
             }
@@ -224,6 +209,102 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         }
         return true;
     });
+}
+
+auto load_hotkey_from_cfg()
+{
+    static auto read_line = [](auto &&line) {
+        if (line.empty())
+            return;
+        auto hash_pos = line.find('#');
+        if (hash_pos == 0)
+            return;
+        std::string left, desc;
+        if (hash_pos == std::string::npos)
+        {
+            left = line;
+        }
+        else
+        {
+            left = str::trim_copy(line.substr(0, hash_pos));
+            desc = str::trim_copy(line.substr(hash_pos + 1));
+        }
+        auto parts = str::split(left, "=", false);
+        if (parts.size() < 2)
+            return;
+
+        bool invalid = false;
+        KeyHookItem hook;
+        hook.source = KeyCodes::str2key(str::trim_copy(parts.at(0)));
+        hook.desc = desc.empty() ? parts.at(1) : desc;
+        invalid = hook.source < 0;
+
+        str::trim(hook.desc);
+        parts = str::split(parts.at(1), ",", false);
+        for (auto &&it : parts)
+        {
+            std::vector<int> combine;
+            auto arr = str::split(it, " ", false);
+            std::transform(arr.begin(), arr.end(), std::back_inserter(combine), [&invalid](auto &&key) {
+                auto code = KeyCodes::str2key(str::trim_copy(key));
+                if (code < 0)
+                    invalid = true;
+                return code;
+            });
+            hook.target_keys.push_back(combine);
+        }
+
+        if (invalid)
+            hook.desc = "!!INVALID: " + hook.desc;
+        key2hook_[hook.source] = hook;
+    };
+    static auto read_cfg = [](auto &&text) {
+        auto parts = str::split(text, "\r", false);
+        for (auto &&it : parts)
+        {
+            read_line(it);
+        }
+    };
+
+    // load default config
+    {
+        auto res = FindResource(NULL, MAKEINTRESOURCE(IDR_CFG2), TEXT("CFG"));
+        auto locked = (char *)LockResource(LoadResource(NULL, res));
+        if (locked != nullptr)
+        {
+            std::string text(locked, SizeofResource(NULL, res));
+            read_cfg(text);
+        }
+        FreeResource(locked);
+    }
+
+    // load user config
+    {
+        namespace fs = std::filesystem;
+        std::ifstream in("caps.cfg");
+        std::string text({ std::istreambuf_iterator<char>(in), {} });
+        read_cfg(text);
+    }
+}
+
+int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
+{
+    icon_logo_ = LoadIcon(hInst, MAKEINTRESOURCE(IDI_ICON2));
+    app_path_ = []() -> std::wstring {
+        std::wstring path(MAX_PATH, 0);
+        GetModuleFileName(NULL, path.data(), (DWORD)path.size());
+        return path;
+    }();
+    is_autorun_ = is_app_autorun(APP_ID);
+
+    CapsHotkey hotkey;
+    hotkey.register_hook(VK_OEM_7, simulate_mouse_up, "Mouse up");
+    hotkey.register_hook(VK_OEM_1, simulate_mouse_down, "Mouse down");
+    hotkey.register_hook(VK_OEM_2, show_main_window, "Show help window");
+    hotkey.register_hook(char2key('q'), quit_current_app, "Quit CapsHotkey");
+
+    load_hotkey_from_cfg();
+    run_imgui_loop();
 
     // MSG msg;
     // while (GetMessage(&msg, NULL, 0, 0) > 0)

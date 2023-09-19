@@ -1,15 +1,11 @@
 #pragma once
 
-#include "CapsHotkey.hpp"
-#include "res/resource.h"
-#include <atlbase.h>
+#include <Windows.h>
 
-#include <atlapp.h>
-#include <atlctrls.h>
-#include <atlctrlx.h>
-#include <shellapi.h>
+#include "CapsHotkey.hpp"
+#include "HkeyUser.hpp"
+#include "res/resource.h"
 #include <simple/str.hpp>
-#include <simple/use_wtl.hpp>
 #include <string>
 
 static auto simulate_mouse_down()
@@ -48,11 +44,6 @@ public:
     }
 
 public:
-    std::wstring name() const
-    {
-        return std::format(L"{} {}", appid_, appver_);
-    }
-
     std::map<int, KeyHookItem> hooks() const
     {
         return hotkey_.hooks();
@@ -87,16 +78,14 @@ public:
 
     void toggle_autorun_enabled()
     {
-        CRegKeyEx key;
+        HkeyUser hku(subkey_.c_str(), KEY_WRITE);
         if (is_auto_run())
         {
-            key.Open(HKEY_CURRENT_USER, subkey_.c_str(), KEY_WRITE);
-            key.DeleteValue(appid_.c_str());
+            hku.remove(std::wstring_view{ subkey_ });
         }
         else
         {
-            key.Create(HKEY_CURRENT_USER, subkey_.c_str());
-            key.SetStringValue(appid_.c_str(), get_app_path().c_str());
+            hku.write(std::wstring_view{ appid_ }, std::wstring_view{ get_app_path() });
         }
     }
 
@@ -136,11 +125,8 @@ private:
 
     bool is_auto_run() const
     {
-        TCHAR value[256];
-        ULONG len = 256;
-        CRegKeyEx key;
-        key.Open(HKEY_CURRENT_USER, subkey_.c_str(), KEY_READ);
-        return key.QueryStringValue(appid_.c_str(), value, &len) == ERROR_SUCCESS && value == get_app_path();
+        HkeyUser hku(subkey_.c_str(), KEY_READ);
+        return hku.read(std::wstring_view{ appid_ }) == get_app_path();
     }
 
     std::wstring get_app_path() const
@@ -185,7 +171,6 @@ protected:
     HICON icon_logo_{ 0 };
     HWND hwnd_;
     std::wstring appid_{ L"Capslock Hotkey" };
-    std::wstring appver_{ L"v2.5" };
     std::wstring subkey_{ L"Software\\Microsoft\\Windows\\CurrentVersion\\Run" };
     CapsHotkey hotkey_;
 };

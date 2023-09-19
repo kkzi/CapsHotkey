@@ -247,7 +247,7 @@ namespace KeyCodes
             result = GetKeyNameTextA(scancode << 16, text, 128);
         }
         if (result == 0)
-            itoa((int)vk, text, 10);
+            _itoa_s((int)vk, text, 10);
         return text;
     }
 }  // namespace KeyCodes

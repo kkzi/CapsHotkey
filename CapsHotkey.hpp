@@ -10,7 +10,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
-#include <windows.h>
+#include <simple/str.hpp>
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -147,33 +147,6 @@ static void key_click(int key)
     key_click(std::vector<int>{ key });
 }
 
-// static std::vector<KeyHookItem> key_hooks_{
-//    { char2key('h'), { { VK_LEFT } } },
-//    { char2key('j'), { { VK_DOWN } } },
-//    { char2key('k'), { { VK_UP } } },
-//    { char2key('l'), { { VK_RIGHT } } },
-//    { char2key('n'), { { VK_DOWN } } },
-//    { char2key('a'), { { VK_HOME } } },
-//    { char2key('e'), { { VK_END } } },
-//    { char2key('b'), { { VK_CONTROL, VK_LEFT } } },
-//    { char2key('f'), { { VK_CONTROL, VK_RIGHT } } },
-//    { char2key('d'), { { VK_DELETE } } },
-//    { char2key('y'), { { VK_CONTROL, VK_INSERT } } },
-//    { char2key('p'), { { VK_SHIFT, VK_INSERT } } },
-//    { char2key('m'), { { VK_SHIFT, VK_F10 } } },
-//
-//    { char2key('w'), { { VK_LCONTROL, VK_LSHIFT, VK_LEFT }, { VK_LCONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete word backforward" },
-//    { char2key('u'), { { VK_SHIFT, VK_HOME }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete from cursor to line begin" },
-//    { char2key('c'), { { VK_SHIFT, VK_END }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete from cursor to line end" },
-//    { char2key('s'), { { VK_HOME }, { VK_SHIFT, VK_END }, { VK_CONTROL, VK_INSERT }, { VK_DELETE } }, nullptr, "Delete current line" },
-//    { char2key('o'), { { VK_HOME }, { VK_RETURN }, { VK_UP } }, nullptr, "Insert new blank line before current" },
-//    //{ char2key('o'), { { VK_END, VK_RETURN } }, nullptr, "Insert new blank line after current" },
-//
-//    { VK_OEM_COMMA, { { VK_CONTROL, VK_SHIFT, VK_TAB } } },
-//    { VK_OEM_PERIOD, { { VK_CONTROL, VK_TAB } } },
-//
-//};
-
 static auto hook_capslock(WPARAM wParam) -> bool
 {
     if (capslock_busy_)
@@ -299,7 +272,64 @@ public:
 public:
     void register_hook(int keycode, const KeyHookFunc &func, std::string_view desc)
     {
-        key2hook_[keycode] = KeyHookItem{ keycode, {}, func, std::string{ desc } };
+        register_hook(KeyHookItem{ keycode, {}, func, std::string{ desc } });
+    }
+
+    void register_hook(const KeyHookItem &item)
+    {
+        key2hook_[item.source] = item;
+    }
+
+    void register_hook(std::string_view line)
+    {
+        if (line.empty())
+            return;
+        auto hash_pos = line.find('#');
+        if (hash_pos == 0)
+            return;
+        std::string left, desc;
+        if (hash_pos == std::string::npos)
+        {
+            left = line;
+        }
+        else
+        {
+            left = str::trim_copy(line.substr(0, hash_pos));
+            desc = str::trim_copy(line.substr(hash_pos + 1));
+        }
+        auto parts = str::split(left, "=", false);
+        if (parts.size() < 2)
+            return;
+
+        bool invalid = false;
+        KeyHookItem hook;
+        hook.source = KeyCodes::str2key(str::trim_copy(parts.at(0)));
+        hook.desc = desc.empty() ? parts.at(1) : desc;
+        invalid = hook.source < 0;
+
+        str::trim(hook.desc);
+        parts = str::split(parts.at(1), ",", false);
+        for (auto &&it : parts)
+        {
+            std::vector<int> combine;
+            auto arr = str::split(it, " ", false);
+            std::transform(arr.begin(), arr.end(), std::back_inserter(combine), [&invalid](auto &&key) {
+                auto code = KeyCodes::str2key(str::trim_copy(key));
+                if (code < 0)
+                    invalid = true;
+                return code;
+            });
+            hook.target_keys.push_back(combine);
+        }
+
+        if (invalid)
+            hook.desc = "!!INVALID: " + hook.desc;
+        register_hook(hook);
+    }
+
+    const std::map<int, KeyHookItem> &hooks()
+    {
+        return key2hook_;
     }
 
 private:

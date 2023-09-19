@@ -2,6 +2,7 @@
 
 #include <WinUser.h>
 #include <algorithm>
+#include <iterator>
 #include <map>
 #include <string>
 

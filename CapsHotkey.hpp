@@ -327,7 +327,7 @@ public:
         register_hook(hook);
     }
 
-    const std::map<int, KeyHookItem> &hooks()
+    const std::map<int, KeyHookItem> &hooks() const
     {
         return key2hook_;
     }

@@ -1,6 +1,6 @@
 ﻿#include <Windows.h>
 
-#include "MainWindow.hpp"
+#include "MainWindowWtl.hpp"
 #include "res/resource.h"
 
 CAppModule _Module;

@@ -38,9 +38,9 @@ enum class HookStatus
 static HookStatus status_{ HookStatus::Normal };
 static bool capslock_busy_{ false };
 static bool capslock_pressed_{ false };
+static bool simulate_keydown_{ false };
 static std::optional<KeyHookItem> capslock_hook_{ std::nullopt };
 static std::optional<time_point<system_clock>> capslock_pressed_time_{ std::nullopt };
-
 static std::map<int, bool> modified_pressed_{
     { VK_LCONTROL, false },
     { VK_LMENU, false },
@@ -88,39 +88,43 @@ static void key_up(int key)
     SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
 }
 
-static void key_down(int key)
-{
-    log("-- keydown {}", KeyCodes::key2str(key));
-    INPUT inputs[1]{};
-    inputs[0].type = 1;
-    inputs[0].ki.wVk = (short)key;
-    SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
-}
-
 static void key_click(const std::vector<int> &arr)
 {
-    if (arr.empty())
-        return;
+    // if (arr.empty())
+    //    return;
 
-    auto len = arr.size() * 2;
-    auto inputs = new INPUT[len]{ 0 };
-    std::string txt;
-    for (auto i = 0; i < arr.size(); ++i)
-    {
-        auto key = arr[i];
-        txt += KeyCodes::key2str(key);
-        auto upi = len - 1 - i;
+    // auto len = arr.size() * 2;
+    // auto inputs = new INPUT[len]{ 0 };
+    // std::string txt;
+    // for (auto i = 0; i < arr.size(); ++i)
+    //{
+    //    auto key = arr[i];
+    //    txt += KeyCodes::key2str(key);
+    //    auto upi = len - 1 - i;
 
-        inputs[i].type = 1;
-        inputs[i].ki.wVk = key;
+    //    inputs[i].type = 1;
+    //    inputs[i].ki.wVk = key;
 
-        inputs[upi].type = 1;
-        inputs[upi].ki.wVk = key;
-        inputs[upi].ki.dwFlags = KEYEVENTF_KEYUP;
-    }
-    log("--key click: {}", txt);
-    auto n = SendInput((UINT)len, inputs, (UINT)sizeof(INPUT));
-    delete[] inputs;
+    //    inputs[upi].type = 1;
+    //    inputs[upi].ki.wVk = key;
+    //    inputs[upi].ki.dwFlags = KEYEVENTF_KEYUP;
+    //}
+    // log("--key click: {}", txt);
+    // auto n = SendInput((UINT)len, inputs, (UINT)sizeof(INPUT));
+    // delete[] inputs;
+
+    static constexpr int KEYEVENTF_KEYDOWN = 0;  // why doesn't that already exist???
+
+    simulate_keydown_ = true;
+    std::for_each(arr.begin(), arr.end(), [](auto key) {
+        log("--key down: {}", KeyCodes::key2str(key));
+        keybd_event(key, 0, KEYEVENTF_KEYDOWN, 0);
+    });
+    simulate_keydown_ = false;
+    std::for_each(arr.rbegin(), arr.rend(), [](auto key) {
+        log("--key up: {}", KeyCodes::key2str(key));
+        keybd_event(key, 0, KEYEVENTF_KEYUP, 0);
+    });
 }
 
 static void reset_modifies()
@@ -199,33 +203,24 @@ static auto hook_other_key(int key, WPARAM wParam) -> bool
 
     auto keydown = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
     auto state = keydown ? "down" : "up";
-    // if (key == VK_LSHIFT && !keydown && status_ == HookStatus::Hooking)
-    //{
-    //    log("ignore {} {}", key2str(key), state);
-    //    return true;
-    //}
-
-    if (modified_pressed_.contains(key))
+    if (keydown)
     {
-        auto old = modified_pressed_[key] == keydown;
-        modified_pressed_[key] = keydown;
-        auto ignored = old && status_ == HookStatus::Hooking;
-        if (ignored)
+        if (status_ != HookStatus::Hooking && key2hook_.contains(key))
         {
-            log("ignore {} {}", KeyCodes::key2str(key), state);
+            log("hook {} {}", KeyCodes::key2str(key), state);
+            status_ = HookStatus::Hooking;
+            process_hotkey(key2hook_.at(key));
+            status_ = HookStatus::Hooked;
+            log("hook down");
+            return true;
         }
-        return ignored;
     }
-
-    if (keydown && status_ != HookStatus::Hooking && key2hook_.contains(key))
+    else if (simulate_keydown_ && modified_pressed_.contains(key))
     {
-        log("hook {} {}", KeyCodes::key2str(key), state);
-        status_ = HookStatus::Hooking;
-        process_hotkey(key2hook_.at(key));
-        status_ = HookStatus::Hooked;
-        log("hook down");
+        log("--ignore {} {}", KeyCodes::key2str(key), state);
         return true;
     }
+
     return false;
 }
 

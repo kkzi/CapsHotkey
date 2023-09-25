@@ -14,7 +14,7 @@ int WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPS
 
     auto logo = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON2));
     thWin32App app;
-    thForm form(logo, TEXT("Capslock Hotkey v2.7"));
+    thForm form(logo, TEXT("Capslock Hotkey v2.8"));
     form.Width = 600;
     form.Height = 400;
     form.X = (GetSystemMetrics(SM_CXSCREEN) - form.Width) / 2;
@@ -36,7 +36,8 @@ int WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPS
 
     table.SetView(thListView::eViewType_t::view_details);
 
-    CapsHotkeyApp cha(logo, form.GetHandle());
+    auto hwnd = form.GetHandle();
+    CapsHotkeyApp cha(logo, hwnd);
     auto i = 0;
     for (auto &&[k, it] : cha.hooks())
     {
@@ -52,6 +53,10 @@ int WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPS
         return 0;
     };
     form.UserMessage[WM_ERASEBKGND] = [&cha](auto &&, auto &&) -> LRESULT { return (INT_PTR)GetStockObject(WHITE_BRUSH); };
+    form.UserMessage[WM_CLOSE] = [hwnd](auto &&, auto &&) -> LRESULT {
+        ShowWindow(hwnd, SW_HIDE);
+        return TRUE;
+    };
     form.UserMessage[WM_CTLCOLORSTATIC] = [&cha](auto &&, auto &&) -> LRESULT { return (INT_PTR)GetStockObject(WHITE_BRUSH); };
     form.UserMessage[WM_COMMAND] = [&cha](auto &&obj, auto &&arg) -> LRESULT {
         switch (MenuAction(LOWORD(arg.wParam)))

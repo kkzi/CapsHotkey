@@ -7,8 +7,8 @@
 class HkeyUser
 {
 public:
-    template <class T>
-    HkeyUser(const T *subkey, REGSAM desired)
+    template <class S>
+    HkeyUser(const S &subkey, REGSAM desired)
     {
         ok_ = RegOpenKeyEx(HKEY_CURRENT_USER, subkey, 0, desired, &raw_) == ERROR_SUCCESS;
     }
@@ -20,34 +20,34 @@ public:
 
 public:
     template <class T>
-    std::basic_string<T> read(std::basic_string_view<T> path) const
+    T read(const T &path) const
     {
         if (!ok_)
-            return TEXT("");
+            return T{};
 
         DWORD len = 0;
         if (RegQueryValueEx(raw_, path.data(), NULL, NULL, NULL, &len) != ERROR_SUCCESS)
         {
-            return TEXT("");
+            return T{};
         }
 
-        std::basic_string<T> value(len / sizeof(T), '\0');
+        T value((size_t)len / sizeof(T::value_type), ' ');
         if (RegQueryValueEx(raw_, path.data(), NULL, NULL, (BYTE *)value.data(), &len) != ERROR_SUCCESS)
         {
-            return TEXT("");
+            return T{};
         }
         return value;
     }
 
     template <class T>
-    bool write(std::basic_string_view<T> name, std::basic_string_view<T> value)
+    bool write(const T &name, const T &value)
     {
-        auto len = (DWORD)(value.size() * sizeof(T));
+        auto len = (DWORD)(value.size() * sizeof(T::value_type));
         return ok_ && RegSetValueEx(raw_, name.data(), 0, REG_SZ, (const BYTE *)value.data(), len) == ERROR_SUCCESS;
     }
 
     template <class T>
-    bool remove(std::basic_string_view<T> name)
+    bool remove(const T &name)
     {
         return ok_ && RegDeleteValue(raw_, name.data()) == ERROR_SUCCESS;
     }

@@ -5,6 +5,7 @@
 #include "CapsHotkey.hpp"
 #include "HkeyUser.hpp"
 #include "res/resource.h"
+#include <ranges>
 #include <simple/str.hpp>
 #include <string>
 
@@ -79,13 +80,11 @@ public:
     void toggle_autorun_enabled()
     {
         HkeyUser hku(subkey_.c_str(), KEY_WRITE);
-        if (is_auto_run())
+        auto need_set = !is_auto_run();
+        hku.remove(std::wstring_view{ appid_ });
+        if (need_set)
         {
-            hku.remove(std::wstring_view{ subkey_ });
-        }
-        else
-        {
-            hku.write(std::wstring_view{ appid_ }, std::wstring_view{ get_app_path() });
+            hku.write(appid_, get_app_path());
         }
     }
 
@@ -126,7 +125,20 @@ private:
     bool is_auto_run() const
     {
         HkeyUser hku(subkey_.c_str(), KEY_READ);
-        return hku.read(std::wstring_view{ appid_ }) == get_app_path();
+        auto left = hku.read(appid_);
+        auto right = get_app_path();
+        auto len = std::min<size_t>(left.size(), right.size());
+        for (auto i = 0; i < len; ++i)
+        {
+            auto a = left[i], b = right[i];
+            if (a == '\0' || b == '\0')
+                break;
+
+            if (a != b)
+                return false;
+        }
+
+        return true;
     }
 
     std::wstring get_app_path() const

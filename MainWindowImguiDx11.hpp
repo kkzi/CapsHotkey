@@ -11,7 +11,7 @@
 #endif
 
 static auto APP_ID = L"Capslock Hotkey";
-static auto APP_VERSION = L"v2.9";
+static auto APP_VERSION = L"v2.10";
 static auto run_imgui_loop(HINSTANCE inst)
 {
     static std::shared_ptr<CapsHotkeyApp> app = nullptr;

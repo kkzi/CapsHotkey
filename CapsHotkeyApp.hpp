@@ -5,6 +5,7 @@
 #include "CapsHotkey.hpp"
 #include "HkeyUser.hpp"
 #include "res/resource.h"
+#include <filesystem>
 #include <ranges>
 #include <simple/str.hpp>
 #include <string>
@@ -125,20 +126,13 @@ private:
     bool is_auto_run() const
     {
         HkeyUser hku(subkey_.c_str(), KEY_READ);
-        auto left = hku.read(appid_);
-        auto right = get_app_path();
-        auto len = std::min<size_t>(left.size(), right.size());
-        for (auto i = 0; i < len; ++i)
-        {
-            auto a = left[i], b = right[i];
-            if (a == '\0' || b == '\0')
-                break;
+        auto left = str::trim_copy(hku.read(appid_));
+        auto right = str::trim_copy(get_app_path());
 
-            if (a != b)
-                return false;
-        }
+        if (left.empty())
+            return false;
 
-        return true;
+        return left.find(right) != std::wstring::npos || right.find(left) != std::wstring::npos;
     }
 
     std::wstring get_app_path() const

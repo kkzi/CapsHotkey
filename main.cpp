@@ -12,9 +12,9 @@ language='*'\"")
 #define TRAY_WINAPI 1
 
 #include "CapsHotkeyApp.hpp"
-#include "tray.h"
 #include <filesystem>
 #include <simple/str.hpp>
+#include <simple/tray.hpp>
 #include <simple/use_win32.hpp>
 
 std::wstring appid_{ L"Capslock Hotkey" };
@@ -31,20 +31,21 @@ void load_hotkey_from_cfg(CapsHotkey &hotkey)
     };
 
     // load default config
+    if (auto res = FindResource(NULL, MAKEINTRESOURCE(IDR_CFG2), TEXT("CFG")); res > 0)
     {
-        auto res = FindResource(NULL, MAKEINTRESOURCE(IDR_CFG2), TEXT("CFG"));
-        auto locked = (char *)LockResource(LoadResource(NULL, res));
-        if (locked != nullptr)
+        if (auto rr = LoadResource(NULL, res); rr > 0)
         {
-            std::string text(locked, SizeofResource(NULL, res));
-            read_cfg(text);
-            FreeResource(locked);
+            if (auto locked = (char *)LockResource(rr); locked != nullptr)
+            {
+                std::string text(locked, SizeofResource(NULL, res));
+                read_cfg(text);
+                FreeResource(locked);
+            }
         }
     }
 
     // load user config
     {
-        namespace fs = std::filesystem;
         std::ifstream in("caps.cfg");
         std::string text({ std::istreambuf_iterator<char>(in), {} });
         read_cfg(text);
@@ -83,20 +84,20 @@ void toggle_autorun_enabled()
 
 void run_tray_loop(HICON icon)
 {
-    tray_icon tray(icon);
+    tray_icon tray;
     auto quit = [&tray] { tray.quit(); };
-    tray.init_menus({
-        tray_menu{ L"v2.11" },
-        tray_menu{ L"-" },
-        tray_menu{ L"Autorun",
-            [&tray](auto &item) {
-                toggle_autorun_enabled();
-                item.checked = is_auto_run();
-                tray.update_tray();
-            },
-            is_auto_run() },
-        tray_menu{ L"Quit", [&quit](auto &) { quit(); } },
-    });
+    tray.initialize(icon, {
+                              tray_menu{ L"v2.11" },
+                              tray_menu{ L"-" },
+                              tray_menu{ L"Autorun",
+                                  [&tray](auto &item) {
+                                      toggle_autorun_enabled();
+                                      item.checked = is_auto_run();
+                                      tray.update_tray();
+                                  },
+                                  is_auto_run() },
+                              tray_menu{ L"Quit", [&quit](auto &) { quit(); } },
+                          });
 
     CapsHotkey app;
     {
